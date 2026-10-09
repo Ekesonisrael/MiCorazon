@@ -1074,6 +1074,51 @@
         opacity: 1;
       }
 
+      /* Video Fallback & Retry Panel */
+      .video-fallback-panel {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--cream);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 16px;
+        z-index: 10;
+        text-align: center;
+      }
+
+      .video-fallback-text {
+        font-family: 'Caveat', cursive;
+        font-size: 20px;
+        color: var(--caramel);
+      }
+
+      .video-retry-btn {
+        font-family: 'DM Sans', sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--espresso);
+        background: transparent;
+        border: 1.5px dashed var(--latte);
+        border-radius: var(--r-pill);
+        min-height: 44px;
+        padding: 10px 22px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 200ms ease, border-color 200ms ease;
+      }
+
+      .video-retry-btn:hover {
+        background: rgba(217, 191, 163, 0.25);
+        border-color: var(--caramel);
+      }
+
       /* ==========================================================================
          SECTION 6: LIGHTBOX
          ========================================================================== */
@@ -2328,22 +2373,26 @@
           artist: "Johnny Drille",
           spotifyTrackId: "2QdqML21AFaQPWxmhuv1KW"
         },
+        THEME: {
+          src: "theme.mp3",
+          volume: 0.35
+        },
         CLIENT_NOTE: "Listen to this song whenever you're feeling down or stressed from school, and always remember to think about us.",
         WISH_PROMPT: "Now make a wish, and don't tell anyone.",
         WISH_DONE: "Your wish is made! ✨",
         SIGN_OFF: "With all my love, Agatha",
-        /* SAMPLE COPY, replace with real memories */
+        /* Edit these lines to match your real memories. Captions are the words on the front of each card. */
         MEMORIES: [
-          { title: "The day we met", date: "A special moment", caption: "the day we met", message: "Funny how one ordinary day turned into the best friendship.", src: "memory01.mp4", type: "video" },
-          { title: "Our first long gist", date: "A special moment", caption: "our first long gist", message: "We said five minutes and talked until the night got tired.", src: "memory02.mp4", type: "video" },
-          { title: "Garri night", date: "A special moment", caption: "garri night", message: "No plan, no money, just garri and laughter. Perfect.", src: "memory03.png", type: "image" },
-          { title: "Random conversations", date: "A special moment", caption: "random conversations", message: "Nothing about them mattered, and somehow we remember every single one.", src: "memory04.mp4", type: "video" },
-          { title: "Laughing too loud", date: "A special moment", caption: "laughing too loud", message: "That laugh that makes everyone else turn around and join in.", src: "memory05.mp4", type: "video" },
-          { title: "Prayers and plans", date: "A special moment", caption: "prayers and plans", message: "We prayed for beautiful futures and kept laughing while we waited.", src: "memory06.mp4", type: "video" },
-          { title: "The stressed season", date: "A special moment", caption: "the stressed season", message: "School was heavy, but you made even the heavy days feel lighter.", src: "memory07.mp4", type: "video" },
-          { title: "Our little moments", date: "A special moment", caption: "our little moments", message: "These small moments are the ones I would never trade.", src: "memory08.mp4", type: "video" },
-          { title: "Growing together", date: "A special moment", caption: "growing together", message: "Different paths, same friendship, and we always find our way back.", src: "memory09.mp4", type: "video" },
-          { title: "Still here", date: "A special moment", caption: "still here", message: "Through every change, you stayed. That means everything to me.", src: "memory10.png", type: "image" }
+          { title: "My amigo", date: "", caption: "my amigo", message: "Ride or die, no matter the weather. 💛", src: "memory01.mp4", type: "video" },
+          { title: "Loving you forever", date: "", caption: "loving you forever", message: "Some people you keep forever, and you are one of them.", src: "memory02.mp4", type: "video" },
+          { title: "Life is sweet", date: "", caption: "life is sweet with you", message: "Everything feels sweeter with you in it.", src: "memory03.png", type: "image" },
+          { title: "Nothing separates us", date: "", caption: "nothing separates us", message: "Distance, stress, or school, nothing should separate us.", src: "memory04.mp4", type: "video" },
+          { title: "My love", date: "", caption: "my love 💕", message: "You make even the heavy days feel lighter.", src: "memory05.mp4", type: "video" },
+          { title: "Gist partner", date: "", caption: "gist partner", message: "Every long gist, every random voice note, every laugh.", src: "memory06.mp4", type: "video" },
+          { title: "Still here", date: "", caption: "still here", message: "Through every season, you never left my side.", src: "memory07.mp4", type: "video" },
+          { title: "My person", date: "", caption: "my person", message: "The one I call first, even when we have nothing to say.", src: "memory08.mp4", type: "video" },
+          { title: "To more winning", date: "", caption: "to more winning", message: "Here is to growing, winning, and every beautiful thing ahead.", src: "memory09.mp4", type: "video" },
+          { title: "Forever my girl", date: "", caption: "forever my girl", message: "You will always have a place in my heart.", src: "memory10.png", type: "image" }
         ]
       };
 
@@ -2358,6 +2407,10 @@
       let spotifyController = null;
       let spotifyEmbedBuilt = false;
       let isSpotifyPlaying = false;
+      let themeAudio = null;
+      let themeLocked = false;
+      let themePausedByVideo = false;
+      let themeFadeInterval = null;
       let noteSpawnerInterval = null;
       let isListeningMic = false;
       let audioCtx = null;
@@ -2692,6 +2745,185 @@
         letterBodyScroll.appendChild(p);
       });
 
+      /* ==========================================================================
+         BIRTHDAY THEME MUSIC ENGINE
+         ========================================================================== */
+      function fadeThemeVolume(targetVol, durationMs, onComplete) {
+        if (!themeAudio) return;
+        if (themeFadeInterval) clearInterval(themeFadeInterval);
+        const startVol = themeAudio.volume;
+        const startTime = performance.now();
+        themeFadeInterval = setInterval(() => {
+          const elapsed = performance.now() - startTime;
+          const progress = Math.min(1, elapsed / durationMs);
+          if (themeAudio) {
+            themeAudio.volume = Math.max(0, Math.min(1, startVol + (targetVol - startVol) * progress));
+          }
+          if (progress >= 1) {
+            clearInterval(themeFadeInterval);
+            themeFadeInterval = null;
+            if (onComplete) onComplete();
+          }
+        }, 30);
+      }
+
+      function startThemeMusic() {
+        if (themeAudio || themeLocked) return;
+        try {
+          themeAudio = new Audio(CONFIG.THEME.src);
+          themeAudio.loop = true;
+          themeAudio.volume = 0;
+          themeAudio.addEventListener('error', () => {
+            // Stay silent and show no error
+          });
+          const p = themeAudio.play();
+          if (p !== undefined) {
+            p.then(() => {
+              fadeThemeVolume(CONFIG.THEME.volume, 2000);
+            }).catch(() => {
+              // If browser blocks playback, do nothing and show no error
+            });
+          }
+        } catch (e) {
+          // Stay silent and show no error
+        }
+      }
+
+      function pauseThemeForVideo() {
+        if (!themeAudio || themeLocked) return;
+        themePausedByVideo = true;
+        fadeThemeVolume(0, 300, () => {
+          if (themeAudio && themePausedByVideo) {
+            themeAudio.pause();
+          }
+        });
+      }
+
+      function resumeThemeAfterVideo() {
+        if (!themeAudio || themeLocked) return;
+        if (themePausedByVideo) {
+          themePausedByVideo = false;
+          const p = themeAudio.play();
+          if (p !== undefined) {
+            p.then(() => {
+              fadeThemeVolume(CONFIG.THEME.volume, 1000);
+            }).catch(() => {});
+          } else {
+            fadeThemeVolume(CONFIG.THEME.volume, 1000);
+          }
+        }
+      }
+
+      function lockAndStopThemeForSpotify() {
+        if (themeLocked) return;
+        themeLocked = true;
+        if (themeAudio) {
+          fadeThemeVolume(0, 1000, () => {
+            if (themeAudio) {
+              themeAudio.pause();
+            }
+          });
+        }
+      }
+
+      /* ==========================================================================
+         LETTER AUTO-SCROLL ENGINE
+         ========================================================================== */
+      let letterAutoScrollRaf = null;
+      let letterAutoScrollActive = false;
+      let letterAutoScrollCancelled = false;
+      let programmaticScrollInProgress = false;
+      let signOffRevealed = false;
+
+      function revealSignOffAndContinue() {
+        if (signOffRevealed) return;
+        signOffRevealed = true;
+        letterSignOffText.classList.add('show');
+        setTimeout(() => {
+          letterContinueBtn.classList.add('visible');
+        }, 400);
+      }
+
+      function cancelLetterAutoScroll() {
+        if (letterAutoScrollCancelled) return;
+        letterAutoScrollCancelled = true;
+        letterAutoScrollActive = false;
+        if (letterAutoScrollRaf) {
+          cancelAnimationFrame(letterAutoScrollRaf);
+          letterAutoScrollRaf = null;
+        }
+      }
+
+      function startLetterAutoScroll() {
+        if (letterAutoScrollCancelled || letterAutoScrollActive) return;
+
+        const distanceToScroll = letterBodyScroll.scrollHeight - letterBodyScroll.clientHeight;
+        if (distanceToScroll <= 2) {
+          return;
+        }
+
+        letterAutoScrollActive = true;
+        const startScrollTop = letterBodyScroll.scrollTop;
+
+        // Total duration is (scrollHeight - clientHeight) / 18 seconds, clamped between 8 and 30 seconds.
+        const rawDurationSec = distanceToScroll / 18;
+        const durationSec = Math.max(8, Math.min(30, rawDurationSec));
+        const totalDurationMs = durationSec * 1000;
+
+        // Gentle ease-in over the first second (1000ms)
+        const vMax = distanceToScroll / Math.max(1, (totalDurationMs - 500));
+
+        let startTime = null;
+
+        function step(timestamp) {
+          if (!letterAutoScrollActive || letterAutoScrollCancelled) return;
+          if (!startTime) startTime = timestamp;
+          const elapsed = timestamp - startTime;
+
+          let currentDistance = 0;
+          if (elapsed <= 1000) {
+            currentDistance = 0.5 * vMax * (elapsed * elapsed / 1000);
+          } else if (elapsed < totalDurationMs) {
+            currentDistance = 500 * vMax + vMax * (elapsed - 1000);
+          } else {
+            currentDistance = distanceToScroll;
+          }
+
+          programmaticScrollInProgress = true;
+          letterBodyScroll.scrollTop = startScrollTop + currentDistance;
+          programmaticScrollInProgress = false;
+
+          if (elapsed >= totalDurationMs || letterBodyScroll.scrollTop >= (startScrollTop + distanceToScroll - 1)) {
+            letterAutoScrollActive = false;
+            letterAutoScrollRaf = null;
+            revealSignOffAndContinue();
+          } else {
+            letterAutoScrollRaf = requestAnimationFrame(step);
+          }
+        }
+
+        letterAutoScrollRaf = requestAnimationFrame(step);
+      }
+
+      letterBodyScroll.addEventListener('pointerdown', () => cancelLetterAutoScroll(), { passive: true });
+      letterBodyScroll.addEventListener('touchstart', () => cancelLetterAutoScroll(), { passive: true });
+      letterBodyScroll.addEventListener('wheel', () => cancelLetterAutoScroll(), { passive: true });
+
+      letterBodyScroll.addEventListener('scroll', () => {
+        if (!programmaticScrollInProgress) {
+          cancelLetterAutoScroll();
+        }
+      }, { passive: true });
+
+      window.addEventListener('keydown', (e) => {
+        if (letterBackdrop.classList.contains('visible')) {
+          const cancelKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', ' ', 'Space', 'Spacebar', 'End', 'Home'];
+          if (cancelKeys.includes(e.key)) {
+            cancelLetterAutoScroll();
+          }
+        }
+      });
+
       // Envelope activation sequence
       let envelopeOpeningLocked = false;
       function openEnvelope() {
@@ -2703,6 +2935,9 @@
 
         // Initialize Spotify Embed during initial user tap gesture
         initSpotifyEmbed();
+
+        // Start Birthday Theme Music
+        startThemeMusic();
 
         const sealRect = waxSeal.getBoundingClientRect();
         const sealX = sealRect.left + sealRect.width / 2;
@@ -2726,6 +2961,7 @@
         setTimeout(() => {
           envelopeSheet.classList.add('slide-up');
           letterBackdrop.classList.add('visible');
+          letterBodyScroll.scrollTop = 0;
         }, 1000);
 
         // 1500ms: Reveal letter paragraphs
@@ -2744,20 +2980,30 @@
 
       function revealLetterParagraphs() {
         const paras = letterBodyScroll.querySelectorAll('.letter-para');
+        signOffRevealed = false;
+        letterAutoScrollCancelled = false;
+        letterAutoScrollActive = false;
+
         paras.forEach((p, idx) => {
           setTimeout(() => {
             p.classList.add('show');
-            // Auto scroll smoothly so newest paragraph stays in view
-            letterBodyScroll.scrollTo({ top: letterBodyScroll.scrollHeight, behavior: 'smooth' });
-
+            if (idx === 0) {
+              const scrollDist = letterBodyScroll.scrollHeight - letterBodyScroll.clientHeight;
+              if (scrollDist > 2) {
+                startLetterAutoScroll();
+              }
+            }
             if (idx === paras.length - 1) {
-              // Reveal sign-off and CONTINUE button after last paragraph
-              setTimeout(() => {
-                letterSignOffText.classList.add('show');
+              const scrollDist = letterBodyScroll.scrollHeight - letterBodyScroll.clientHeight;
+              if (scrollDist <= 2) {
+                setTimeout(revealSignOffAndContinue, 400);
+              } else {
                 setTimeout(() => {
-                  letterContinueBtn.classList.add('visible');
-                }, 400);
-              }, 400);
+                  if (letterAutoScrollCancelled) {
+                    revealSignOffAndContinue();
+                  }
+                }, 800);
+              }
             }
           }, idx * 400);
         });
@@ -2914,8 +3160,12 @@
           } else if (item.type === 'video') {
             slotHtml = `
               <div class="media-slot" data-index="${index}">
-                <video src="${item.src}" class="media-bg-blur" muted playsinline loop preload="metadata" aria-hidden="true"></video>
-                <video src="${item.src}" class="media-vid" muted playsinline loop preload="metadata"></video>
+                <video class="media-bg-blur" muted playsinline loop preload="metadata" aria-hidden="true">
+                  <source src="${item.src}" type="video/mp4">
+                </video>
+                <video class="media-vid" muted playsinline loop preload="metadata">
+                  <source src="${item.src}" type="video/mp4">
+                </video>
                 <button type="button" class="video-play-btn" aria-label="Toggle video">▶</button>
               </div>
             `;
@@ -2945,7 +3195,7 @@
                 <svg class="doodle-corner doodle-bl" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                 <svg class="doodle-corner doodle-br" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
 
-                <div class="card-back-date">${item.date}</div>
+                ${item.date ? `<div class="card-back-date">${item.date}</div>` : ''}
                 <div class="card-back-title">${item.title}</div>
                 <div class="card-back-msg">${item.message}</div>
               </div>
@@ -2966,9 +3216,44 @@
             if (item.type === 'video') {
               const vid = slot.querySelector('.media-vid');
               const bgVid = slot.querySelector('.media-bg-blur');
+              let videoLoaded = false;
+              let loadTimeoutId = null;
+
+              function showVideoFallback() {
+                if (videoLoaded) return;
+                if (slot.querySelector('.video-fallback-panel')) return;
+
+                const panel = document.createElement('div');
+                panel.className = 'video-fallback-panel';
+                panel.innerHTML = `
+                  <svg class="media-camera-icon" viewBox="0 0 24 24">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                  <span class="video-fallback-text">This one is still loading</span>
+                  <button type="button" class="video-retry-btn">tap to retry</button>
+                `;
+
+                const retryBtn = panel.querySelector('.video-retry-btn');
+                retryBtn.addEventListener('click', (e) => {
+                  e.stopPropagation();
+                  panel.remove();
+                  retryVideoLoad();
+                });
+
+                slot.appendChild(panel);
+              }
+
+              function clearVideoFallback() {
+                const panel = slot.querySelector('.video-fallback-panel');
+                if (panel) panel.remove();
+              }
 
               function handleVidMeta() {
                 if (vid.videoWidth && vid.videoHeight) {
+                  videoLoaded = true;
+                  if (loadTimeoutId) clearTimeout(loadTimeoutId);
+                  clearVideoFallback();
                   const rawRatio = vid.videoWidth / vid.videoHeight;
                   const clamped = Math.min(1.25, Math.max(0.66, rawRatio));
                   slot.style.setProperty('--ar', clamped.toFixed(4));
@@ -2978,10 +3263,44 @@
                 }
               }
 
+              function retryVideoLoad() {
+                videoLoaded = false;
+                if (loadTimeoutId) clearTimeout(loadTimeoutId);
+                loadTimeoutId = setTimeout(() => {
+                  if (!videoLoaded) showVideoFallback();
+                }, 8000);
+
+                const srcElem = vid.querySelector('source');
+                if (srcElem) srcElem.src = item.src;
+                vid.load();
+
+                if (bgVid) {
+                  const bgSrcElem = bgVid.querySelector('source');
+                  if (bgSrcElem) bgSrcElem.src = item.src;
+                  bgVid.load();
+                }
+              }
+
+              loadTimeoutId = setTimeout(() => {
+                if (!videoLoaded) {
+                  showVideoFallback();
+                }
+              }, 8000);
+
+              vid.addEventListener('loadedmetadata', handleVidMeta);
+              vid.addEventListener('canplay', handleVidMeta);
+              vid.addEventListener('error', () => {
+                showVideoFallback();
+              });
+              const sourceElem = vid.querySelector('source');
+              if (sourceElem) {
+                sourceElem.addEventListener('error', () => {
+                  showVideoFallback();
+                });
+              }
+
               if (vid.readyState >= 1 && vid.videoWidth) {
                 handleVidMeta();
-              } else {
-                vid.addEventListener('loadedmetadata', handleVidMeta);
               }
             } else {
               const img = slot.querySelector('.media-img');
@@ -3130,7 +3449,8 @@
         currentLightboxIdx = index;
 
         lightboxTitleText.textContent = mem.title;
-        lightboxDateText.textContent = mem.date;
+        lightboxDateText.textContent = mem.date || '';
+        lightboxDateText.style.display = mem.date ? 'block' : 'none';
 
         const prevMedia = lightboxContent.querySelector('.lightbox-media');
         if (prevMedia) prevMedia.remove();
@@ -3144,6 +3464,17 @@
           elem.autoplay = true;
           elem.playsInline = true;
           elem.muted = false;
+
+          // Rule A: video with sound in lightbox pauses theme
+          elem.addEventListener('play', () => {
+            pauseThemeForVideo();
+          });
+          elem.addEventListener('pause', () => {
+            resumeThemeAfterVideo();
+          });
+          elem.addEventListener('ended', () => {
+            resumeThemeAfterVideo();
+          });
         } else {
           elem = document.createElement('img');
           elem.src = mem.src;
@@ -3161,6 +3492,7 @@
           vid.pause();
           vid.src = '';
         }
+        resumeThemeAfterVideo();
         lightboxOverlay.classList.remove('open');
         currentLightboxIdx = -1;
       }
@@ -3490,6 +3822,7 @@
       function updatePlaybackState(isPlaying) {
         isSpotifyPlaying = isPlaying;
         if (isPlaying) {
+          lockAndStopThemeForSpotify();
           musicCard.classList.add('playing');
           musicDynamicStatus.textContent = "Now playing ♪";
           startFloatingNotes();
@@ -3895,6 +4228,13 @@
         letterBodyScroll.querySelectorAll('.letter-para').forEach(p => p.classList.remove('show'));
         letterSignOffText.classList.remove('show');
         letterContinueBtn.classList.remove('visible');
+
+        // Reset letter auto-scroll state
+        cancelLetterAutoScroll();
+        letterAutoScrollCancelled = false;
+        letterAutoScrollActive = false;
+        signOffRevealed = false;
+        letterBodyScroll.scrollTop = 0;
 
         // Replay typed line
         typedLine.textContent = '';
