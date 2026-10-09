@@ -3,12 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Birthday Keepsake</title>
-    <meta name="description" content="A handmade, warm, emotional and playful interactive birthday keepsake." />
-    <meta property="og:title" content="Birthday Keepsake" />
-    <meta property="og:description" content="A handmade, warm, emotional and playful interactive birthday keepsake." />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <title>Happy Birthday, Mi Corazon 🎂</title>
+    <meta name="description" content="Made with love, just for you. Enjoy your day, and keep loving every day.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Happy Birthday, Mi Corazon 🎂">
+    <meta property="og:description" content="Made with love, just for you. Enjoy your day, and keep loving every day.">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Happy Birthday, Mi Corazon 🎂">
+    <meta name="twitter:description" content="Made with love, just for you. Enjoy your day, and keep loving every day.">
 
     <!-- Google Fonts: Playfair Display, Caveat, DM Sans -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -2348,7 +2350,7 @@
         HER_NAME: "Mi Corazon",
         SENDER_NAME: "Agatha",
         EYEBROW: "Something for you, Mi Corazon",
-        COVER_FOOTER: "A handmade keepsake created with love",
+        COVER_FOOTER: "Today is all yours, Mi Corazon. Open slowly.",
         INTRO_LINE: "Ten little reasons this year was better with you",
         LETTER: [
           "Happy birthday to my girl, my person, my forever gist partner 😭💕🎂",
@@ -2375,7 +2377,8 @@
         },
         THEME: {
           src: "theme.mp3",
-          volume: 0.35
+          volume: 0.5,
+          fadeInSeconds: 5
         },
         CLIENT_NOTE: "Listen to this song whenever you're feeling down or stressed from school, and always remember to think about us.",
         WISH_PROMPT: "Now make a wish, and don't tell anyone.",
@@ -2410,7 +2413,9 @@
       let themeAudio = null;
       let themeLocked = false;
       let themePausedByVideo = false;
-      let themeFadeInterval = null;
+      let themeFadeRaf = null;
+      let firstTouchListenersActive = false;
+      const firstTouchEvents = ['click', 'touchend', 'pointerup', 'keydown'];
       let noteSpawnerInterval = null;
       let isListeningMic = false;
       let audioCtx = null;
@@ -2748,51 +2753,131 @@
       /* ==========================================================================
          BIRTHDAY THEME MUSIC ENGINE
          ========================================================================== */
-      function fadeThemeVolume(targetVol, durationMs, onComplete) {
+      function fadeThemeVolumeRaf(targetVol, durationMs, easing = 'ease-in', onComplete) {
         if (!themeAudio) return;
-        if (themeFadeInterval) clearInterval(themeFadeInterval);
+        if (themeFadeRaf) {
+          cancelAnimationFrame(themeFadeRaf);
+          themeFadeRaf = null;
+        }
         const startVol = themeAudio.volume;
         const startTime = performance.now();
-        themeFadeInterval = setInterval(() => {
-          const elapsed = performance.now() - startTime;
-          const progress = Math.min(1, elapsed / durationMs);
-          if (themeAudio) {
-            themeAudio.volume = Math.max(0, Math.min(1, startVol + (targetVol - startVol) * progress));
+
+        function step(now) {
+          if (!themeAudio) return;
+          const elapsed = now - startTime;
+          const progress = Math.min(1, Math.max(0, elapsed / durationMs));
+
+          let factor = progress;
+          if (easing === 'ease-in') {
+            factor = progress * progress;
+          } else if (easing === 'ease-out') {
+            factor = 1 - Math.pow(1 - progress, 2);
+          } else if (easing === 'linear') {
+            factor = progress;
           }
-          if (progress >= 1) {
-            clearInterval(themeFadeInterval);
-            themeFadeInterval = null;
+
+          const currentVol = Math.max(0, Math.min(1, startVol + (targetVol - startVol) * factor));
+          themeAudio.volume = currentVol;
+
+          if (progress < 1) {
+            themeFadeRaf = requestAnimationFrame(step);
+          } else {
+            themeFadeRaf = null;
             if (onComplete) onComplete();
           }
-        }, 30);
+        }
+
+        themeFadeRaf = requestAnimationFrame(step);
       }
 
-      function startThemeMusic() {
+      function startThemeFadeIn() {
+        if (!themeAudio || themeLocked) return;
+        const durationMs = (CONFIG.THEME.fadeInSeconds || 5) * 1000;
+        const targetVol = CONFIG.THEME.volume !== undefined ? CONFIG.THEME.volume : 0.5;
+        fadeThemeVolumeRaf(targetVol, durationMs, 'ease-in');
+      }
+
+      function handleFirstTouch() {
+        if (themeLocked) {
+          removeFirstTouchListeners();
+          return;
+        }
+        removeFirstTouchListeners();
+        if (!themeAudio) return;
+        try {
+          const p = themeAudio.play();
+          if (p !== undefined) {
+            p.then(() => {
+              startThemeFadeIn();
+            }).catch(() => {});
+          } else {
+            startThemeFadeIn();
+          }
+        } catch (e) {}
+      }
+
+      function registerFirstTouchListeners() {
+        if (firstTouchListenersActive || themeLocked) return;
+        firstTouchListenersActive = true;
+        firstTouchEvents.forEach(evt => {
+          document.addEventListener(evt, handleFirstTouch, true);
+        });
+      }
+
+      function removeFirstTouchListeners() {
+        if (!firstTouchListenersActive) return;
+        firstTouchListenersActive = false;
+        firstTouchEvents.forEach(evt => {
+          document.removeEventListener(evt, handleFirstTouch, true);
+        });
+      }
+
+      function initThemeMusic() {
         if (themeAudio || themeLocked) return;
         try {
           themeAudio = new Audio(CONFIG.THEME.src);
           themeAudio.loop = true;
+          themeAudio.preload = "auto";
           themeAudio.volume = 0;
           themeAudio.addEventListener('error', () => {
             // Stay silent and show no error
           });
+
           const p = themeAudio.play();
           if (p !== undefined) {
             p.then(() => {
-              fadeThemeVolume(CONFIG.THEME.volume, 2000);
+              startThemeFadeIn();
             }).catch(() => {
-              // If browser blocks playback, do nothing and show no error
+              registerFirstTouchListeners();
             });
+          } else {
+            startThemeFadeIn();
           }
         } catch (e) {
-          // Stay silent and show no error
+          registerFirstTouchListeners();
+        }
+      }
+
+      function startThemeMusic() {
+        if (themeLocked || !themeAudio) return;
+        if (themeAudio.paused) {
+          try {
+            const p = themeAudio.play();
+            if (p !== undefined) {
+              p.then(() => {
+                startThemeFadeIn();
+              }).catch(() => {});
+            } else {
+              startThemeFadeIn();
+            }
+          } catch (e) {}
         }
       }
 
       function pauseThemeForVideo() {
         if (!themeAudio || themeLocked) return;
         themePausedByVideo = true;
-        fadeThemeVolume(0, 300, () => {
+        fadeThemeVolumeRaf(0, 300, 'linear', () => {
           if (themeAudio && themePausedByVideo) {
             themeAudio.pause();
           }
@@ -2803,28 +2888,38 @@
         if (!themeAudio || themeLocked) return;
         if (themePausedByVideo) {
           themePausedByVideo = false;
-          const p = themeAudio.play();
-          if (p !== undefined) {
-            p.then(() => {
-              fadeThemeVolume(CONFIG.THEME.volume, 1000);
-            }).catch(() => {});
-          } else {
-            fadeThemeVolume(CONFIG.THEME.volume, 1000);
-          }
+          try {
+            const p = themeAudio.play();
+            if (p !== undefined) {
+              p.then(() => {
+                fadeThemeVolumeRaf(CONFIG.THEME.volume, 1000, 'ease-out');
+              }).catch(() => {});
+            } else {
+              fadeThemeVolumeRaf(CONFIG.THEME.volume, 1000, 'ease-out');
+            }
+          } catch (e) {}
         }
       }
 
       function lockAndStopThemeForSpotify() {
         if (themeLocked) return;
         themeLocked = true;
+        if (themeFadeRaf) {
+          cancelAnimationFrame(themeFadeRaf);
+          themeFadeRaf = null;
+        }
+        removeFirstTouchListeners();
         if (themeAudio) {
-          fadeThemeVolume(0, 1000, () => {
+          fadeThemeVolumeRaf(0, 3000, 'linear', () => {
             if (themeAudio) {
               themeAudio.pause();
             }
           });
         }
       }
+
+      // Initialize theme on page load
+      initThemeMusic();
 
       /* ==========================================================================
          LETTER AUTO-SCROLL ENGINE
@@ -3778,15 +3873,9 @@
         spotifyEmbedSlot.innerHTML = `
           <iframe src="https://open.spotify.com/embed/track/${CONFIG.SONG.spotifyTrackId}?utm_source=generator"
                   width="100%" height="152" frameborder="0" allowfullscreen
-                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                  allow="clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                   loading="lazy" style="border-radius:12px"></iframe>
         `;
-
-        if (spotifyController) {
-          try {
-            spotifyController.play();
-          } catch (e) {}
-        }
       }
 
       window.onSpotifyIframeApiReady = (IFrameAPI) => {
@@ -3800,14 +3889,9 @@
           IFrameAPI.createController(element, options, (controller) => {
             spotifyController = controller;
             controller.addListener('playback_update', (e) => {
-              const isPlaying = !e.data.isPaused;
+              const isPlaying = !e.data.isPaused && !Boolean(e.data.isBuffering);
               updatePlaybackState(isPlaying);
             });
-            if (userGestureDone) {
-              try {
-                controller.play();
-              } catch (e) {}
-            }
           });
         } catch (err) {}
       };
@@ -3816,6 +3900,16 @@
       setTimeout(() => {
         if (!spotifyController) {
           musicDynamicStatus.textContent = "Press play in the player above.";
+          window.addEventListener('blur', () => {
+            if (themeLocked) return;
+            const iframe = spotifyEmbedSlot ? spotifyEmbedSlot.querySelector('iframe') : null;
+            if (iframe && document.activeElement === iframe) {
+              lockAndStopThemeForSpotify();
+              musicCard.classList.add('playing');
+              musicDynamicStatus.textContent = "Now playing ♪";
+              startFloatingNotes();
+            }
+          });
         }
       }, 8000);
 
